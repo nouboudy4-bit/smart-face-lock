@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Умный дверной замок с распознаванием лица — IoT</title>
+<style>
+:root{
+  --bg:#0b1220; --panel:#121b2e; --panel2:#18243d; --line:#26365a;
+  --text:#e8eefc; --muted:#8fa0c4; --cyan:#38bdf8; --green:#34d399; --amber:#fbbf24; --red:#f87171; --violet:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#050912;color:var(--text);font-family:Inter,"Segoe UI",system-ui,sans-serif;overflow:hidden}
+#viewport{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{width:1280px;height:720px;position:relative;transform-origin:center center;background:var(--bg);overflow:hidden;border-radius:6px;box-shadow:0 20px 80px #000a}
+.slide{position:absolute;inset:0;padding:54px 72px 64px;opacity:0;pointer-events:none;transform:translateX(30px);transition:opacity .45s,transform .45s;background:
+  radial-gradient(900px 500px at 90% -10%,#2a1f5a55,transparent),radial-gradient(700px 400px at -10% 110%,#0e3a3444,transparent),var(--bg)}
+.slide.active{opacity:1;pointer-events:auto;transform:none}
+.slide.past{transform:translateX(-30px)}
+h1{font-size:62px;line-height:1.05;letter-spacing:-1.5px}
+h2{font-size:38px;letter-spacing:-.5px;margin-bottom:6px}
+h2 small{display:block;font-size:15px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:8px}
+.sub{color:var(--muted);font-size:19px;margin-bottom:22px}
+p,li{font-size:19px;line-height:1.5}
+.muted{color:var(--muted)}
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.card h3{font-size:20px;margin-bottom:8px}
+.card p,.card li{font-size:15.5px;color:#c6d2ee}
+.card ul{padding-left:20px}
+.big{font-size:52px;font-weight:800;letter-spacing:-1px;line-height:1}
+.tag{display:inline-block;font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid currentColor;letter-spacing:.5px}
+.c-cyan{color:var(--cyan)}.c-green{color:var(--green)}.c-amber{color:var(--amber)}.c-red{color:var(--red)}.c-violet{color:var(--violet)}
+pre{background:#070d1a;border:1px solid var(--line);border-radius:12px;padding:14px 16px;font:13px/1.48 "JetBrains Mono","Fira Code",Consolas,monospace;color:#cfe0ff;overflow:hidden;white-space:pre}
+.k{color:#c792ea}.s{color:#c3e88d}.n{color:#f78c6c}.cm{color:#5c6f99}.f{color:#82aaff}
+table{border-collapse:collapse;width:100%;font-size:15.5px}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-size:12.5px;letter-spacing:1px;text-transform:uppercase}
+code{font-family:Consolas,monospace;background:#0a1224;padding:1px 6px;border-radius:5px;color:#9fd2ff;font-size:.92em}
+#bar{position:absolute;left:0;top:0;height:4px;background:linear-gradient(90deg,var(--violet),var(--cyan));transition:width .4s;z-index:10}
+#num{position:absolute;right:28px;bottom:20px;color:var(--muted);font-size:14px;z-index:10}
+#dots{position:absolute;left:72px;bottom:24px;display:flex;gap:7px;z-index:10}
+#dots i{width:8px;height:8px;border-radius:50%;background:#26365a;cursor:pointer;transition:.3s}
+#dots i.on{background:var(--cyan);transform:scale(1.4)}
+#hint{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);font-size:12px;color:#5c6f99;z-index:20}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:14.5px;cursor:pointer;transition:.2s}
+.btn:hover{border-color:var(--cyan)}.btn.on{background:#0e4a6b;border-color:var(--cyan)}
+.phone{width:280px;height:450px;border-radius:30px;background:#0e1621;border:6px solid #2b3a55;display:flex;flex-direction:column;overflow:hidden}
+.phone .hd{background:#17212f;padding:12px 14px;display:flex;gap:10px;align-items:center;border-bottom:1px solid #0a1019}
+.phone .av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#38bdf8);display:grid;place-items:center;font-size:18px}
+.phone .hd b{font-size:15px;display:block}.phone .hd span{font-size:11px;color:#6f86a8}
+.phone .msgs{flex:1;padding:10px;display:flex;flex-direction:column;gap:8px;justify-content:flex-end;overflow:hidden}
+.msg{background:#182533;border-radius:12px 12px 12px 3px;padding:9px 11px;font-size:13px;line-height:1.4;color:#e5edf7;animation:pop .35s;max-width:96%}
+.msg.red{border-left:3px solid var(--red)}.msg.ok{border-left:3px solid var(--green)}.msg.warn{border-left:3px solid var(--amber)}
+.msg i{display:block;font-style:normal;font-size:10px;color:#6f86a8;text-align:right;margin-top:3px}
+.msg .ph{height:70px;border-radius:8px;background:linear-gradient(135deg,#334155,#1e293b);display:grid;place-items:center;font-size:30px;margin:6px 0}
+.msg .kb{display:flex;gap:6px;margin-top:6px}
+.msg .kb button{flex:1;background:#22344a;border:0;color:#9fd2ff;border-radius:7px;padding:6px 4px;font-size:12px;cursor:pointer}
+.msg .kb button:hover{background:#2b4563}
+@keyframes pop{from{transform:translateY(14px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+.pulse{animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.45}}
+.gantt{display:grid;grid-template-columns:230px repeat(5,1fr);gap:6px;align-items:center;font-size:15px}
+.gantt .h{color:var(--muted);font-size:12px;letter-spacing:1px;text-transform:uppercase;text-align:center}
+.gantt .bar{height:28px;border-radius:8px;display:flex;align-items:center;padding:0 10px;font-size:13px;font-weight:600;color:#06101f}
+.stream{font:12.5px/1.55 Consolas,monospace;color:#9fd2ff;background:#070d1a;border:1px solid var(--line);border-radius:12px;padding:12px;height:170px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.stream div{white-space:nowrap;animation:pop .3s}
+.stream .t{color:#5c6f99}.stream .tp{color:#c3e88d}
+.steps{display:flex;flex-direction:column;gap:6px}
+.step{display:flex;align-items:center;gap:10px;font-size:14px;padding:7px 10px;border-radius:9px;background:var(--panel);border:1px solid var(--line);color:var(--muted);transition:.25s}
+.step b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;background:#1e2b46;color:var(--muted);flex:none}
+.step.active{border-color:var(--cyan);color:var(--text)}.step.active b{background:var(--cyan);color:#04111f}
+.step.done{color:var(--text)}.step.done b{background:var(--green);color:#04111f}
+.step.fail{border-color:var(--red);color:var(--text)}.step.fail b{background:var(--red);color:#04111f}
+.yes{color:var(--green);font-weight:700}.no{color:var(--red);font-weight:700}.mid{color:var(--amber);font-weight:700}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+<div id="bar"></div>
+
+<!-- 1. ТИТУЛ -->
+<section class="slide" data-title="Титул">
+  <div style="display:flex;height:100%;align-items:center;gap:40px">
+    <div style="flex:1.15">
+      <span class="tag c-violet">IoT · КОМПЬЮТЕРНОЕ ЗРЕНИЕ · ГРУППОВОЙ ПРОЕКТ</span>
+      <h1 style="margin:22px 0 18px">Умный дверной<br>замок,<br><span class="c-cyan">открывается лицом</span></h1>
+      <p class="muted" style="font-size:21px">Камера → Raspberry Pi → распознавание → реле → замок<br>+ журнал и уведомления в Telegram</p>
+      <p class="muted" style="margin-top:30px;font-size:16px">Лаборатория 502 · 2026</p>
+    </div>
+    <div style="flex:.85">
+      <svg viewBox="0 0 420 460" width="420" height="460">
+        <defs>
+          <radialGradient id="tg"><stop offset="0" stop-color="#a78bfa" stop-opacity=".3"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/></radialGradient>
+          <linearGradient id="dw" x1="0" x2="1"><stop offset="0" stop-color="#7a4a28"/><stop offset="1" stop-color="#5e381c"/></linearGradient>
+        </defs>
+        <circle cx="210" cy="230" r="215" fill="url(#tg)"/>
+        <rect x="40" y="40" width="200" height="390" rx="6" fill="#8b5e3c"/>
+        <rect x="52" y="52" width="176" height="378" fill="url(#dw)"/>
+        <rect x="72" y="80" width="136" height="140" rx="4" fill="none" stroke="#00000055" stroke-width="5"/>
+        <rect x="72" y="250" width="136" height="150" rx="4" fill="none" stroke="#00000055" stroke-width="5"/>
+        <rect x="196" y="236" width="30" height="8" rx="3" fill="#c0c6cf"/>
+        <rect x="200" y="200" width="22" height="34" rx="3" fill="#9aa3ad"/>
+        <!-- настенный модуль -->
+        <rect x="262" y="150" width="56" height="96" rx="8" fill="#111827" stroke="#38bdf8" stroke-width="2"/>
+        <circle cx="290" cy="178" r="13" fill="#0a0a0a" stroke="#38bdf8" stroke-width="3"/><circle cx="290" cy="178" r="5" fill="#1e3a8a"/>
+        <rect x="272" y="200" width="36" height="22" rx="3" fill="#05080f"/><path d="M280 211l6 6 12 -12" stroke="#34d399" stroke-width="3" fill="none"/>
+        <circle cx="290" cy="234" r="6" fill="#f5f5f5"/>
+        <!-- лицо и сканирование -->
+        <g transform="translate(340 300)">
+          <ellipse cx="0" cy="0" rx="46" ry="58" fill="#d9a77f"/>
+          <path d="M-46 -8 C-50 -60 50 -60 46 -8 C40 -40 -40 -40 -46 -8Z" fill="#2b1a10"/>
+          <ellipse cx="-16" cy="2" rx="6" ry="4" fill="#111"/><ellipse cx="16" cy="2" rx="6" ry="4" fill="#111"/>
+          <path d="M-12 30 Q0 38 12 30" stroke="#8a4b3b" stroke-width="3" fill="none"/>
+          <g fill="#38bdf8">
+            <circle cx="-38" cy="16" r="2.4"/><circle cx="-32" cy="34" r="2.4"/><circle cx="-18" cy="48" r="2.4"/><circle cx="0" cy="54" r="2.4"/><circle cx="18" cy="48" r="2.4"/><circle cx="32" cy="34" r="2.4"/><circle cx="38" cy="16" r="2.4"/>
+            <circle cx="-24" cy="-8" r="2.4"/><circle cx="-10" cy="-10" r="2.4"/><circle cx="10" cy="-10" r="2.4"/><circle cx="24" cy="-8" r="2.4"/>
+            <circle cx="0" cy="8" r="2.4"/><circle cx="0" cy="18" r="2.4"/><circle cx="-12" cy="30" r="2.4"/><circle cx="12" cy="30" r="2.4"/>
+          </g>
+          <path d="M-62 -76h20M-62 -76v20M62 -76h-20M62 -76v20M-62 76h20M-62 76v-20M62 76h-20M62 76v-20" stroke="#34d399" stroke-width="4" fill="none"/>
+          <rect x="-60" y="-74" width="120" height="3" fill="#38bdf8" opacity=".8"><animate attributeName="y" values="-74;72;-74" dur="2.6s" repeatCount="indefinite"/></rect>
+        </g>
+        <g stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 5" opacity=".7"><path d="M290 178 L280 225M290 178 L400 225"/></g>
+        <g transform="translate(300 400)"><rect x="-26" y="-6" width="52" height="40" rx="7" fill="#34d399"/><path d="M-15 -6 v-12 a15 15 0 0 1 30 0" stroke="#34d399" stroke-width="7" fill="none"><animate attributeName="d" values="M-15 -6 v-12 a15 15 0 0 1 30 0;M-15 -6 v-12 a15 15 0 0 1 30 0 v-10;M-15 -6 v-12 a15 15 0 0 1 30 0" dur="3s" repeatCount="indefinite"/></path><circle cx="0" cy="13" r="5" fill="#0b1220"/></g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- 2. 3D -->
+<section class="slide" data-title="3D: как это работает" id="scene3dSlide">
+  <h2><small>3D-модель · вращайте мышью, колесо — масштаб</small>Как это работает</h2>
+  <div style="position:relative;margin-top:10px;height:540px;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#0b1220">
+    <div id="scene3d" style="position:absolute;inset:0"></div>
+    <div style="position:absolute;left:16px;top:14px;display:flex;gap:10px;pointer-events:none">
+      <span class="tag" id="s3who" style="background:#0b1220cc;color:var(--text)">—</span>
+      <span class="tag" id="s3phase" style="background:#0b1220cc">Ожидание</span>
+    </div>
+    <button class="btn" id="s3rot" style="position:absolute;right:14px;top:12px;padding:6px 12px;font-size:13px">⏸ Вращение</button>
+    <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 18px;background:linear-gradient(transparent,#050912ee);display:flex;gap:22px;font-size:14px;pointer-events:none">
+      <span>Сценарии по кругу:</span><span class="c-green">① свой — дверь открывается</span><span class="c-red">② незнакомец — отказ + фото в Telegram</span><span class="c-amber">③ фото на телефоне — обман распознан</span>
+    </div>
+  </div>
+</section>
+
+<!-- 3. ЗАЧЕМ -->
+<section class="slide" data-title="Зачем">
+  <h2><small>Зачем это нужно</small>Ключи теряются, карты передаются</h2>
+  <p class="sub">В лабораторию с дорогим оборудованием ходят десятки людей. Сейчас неизвестно, кто и когда заходил.</p>
+  <table style="font-size:17px">
+    <tr><th>Способ доступа</th><th>Можно потерять / передать</th><th>Бесконтактно</th><th>Журнал «кто вошёл»</th><th>Стоимость</th></tr>
+    <tr><td>🔑 Ключ</td><td class="no">да</td><td class="no">нет</td><td class="no">нет</td><td class="yes">низкая</td></tr>
+    <tr><td>💳 RFID-карта</td><td class="no">да</td><td class="yes">да</td><td class="mid">карта, а не человек</td><td class="yes">низкая</td></tr>
+    <tr><td>🔢 PIN-код</td><td class="no">подсмотреть</td><td class="no">нет</td><td class="no">нет</td><td class="yes">низкая</td></tr>
+    <tr><td>☝️ Отпечаток</td><td class="yes">нет</td><td class="no">нет</td><td class="yes">да</td><td class="mid">средняя</td></tr>
+    <tr style="background:#13213a"><td><b>🙂 Лицо (наш проект)</b></td><td class="yes">нет</td><td class="yes">да</td><td class="yes">да + фото</td><td class="mid">≈ 105 $</td></tr>
+  </table>
+  <div class="grid g3" style="margin-top:22px">
+    <div class="card"><h3 class="c-cyan">Удобно</h3><p>Руки заняты коробкой или ноутбуком, а дверь всё равно открывается.</p></div>
+    <div class="card"><h3 class="c-green">Прозрачно</h3><p>Журнал входов, фото незнакомцев и уведомления администратору.</p></div>
+    <div class="card"><h3 class="c-violet">Учебная ценность</h3><p>В одном проекте IoT, компьютерное зрение, сети и безопасность.</p></div>
+  </div>
+</section>
+
+<!-- 4. ЦЕЛЬ -->
+<section class="slide" data-title="Цель">
+  <h2><small>Что делаем</small>Цель и критерии успеха</h2>
+  <p class="sub">Замок открывается для зарегистрированных людей и не открывается для чужих и для фото на телефоне.</p>
+  <div class="grid g2">
+    <div class="card"><h3 class="c-cyan">Функции</h3>
+      <ul><li>Датчик движения будит камеру, когда человек подходит к двери</li><li>Распознавание лица работает на Raspberry Pi, без интернета</li><li>Проверка живости (моргание) защищает от фото</li><li>Реле открывает соленоидный замок на 3 секунды</li><li>Геркон проверяет, что дверь закрылась</li><li>Telegram: журнал входов, фото незнакомцев, удалённое открытие</li><li>Веб-панель для регистрации и удаления лиц</li></ul></div>
+    <div class="card"><h3 class="c-green">Измеримые критерии</h3>
+      <table><tr><td>Время от подхода до открытия</td><td><b>&lt; 2 с</b></td></tr>
+      <tr><td>Ложный отказ своим (FRR)</td><td><b>&lt; 5 %</b></td></tr>
+      <tr><td>Чужой открыл дверь (FAR)</td><td><b>0 из 200 попыток</b></td></tr>
+      <tr><td>Фото и видео на экране отбиты</td><td><b>≥ 95 %</b></td></tr>
+      <tr><td>Уведомление в Telegram</td><td><b>&lt; 3 с</b></td></tr>
+      <tr><td>Работа без интернета</td><td><b>да</b></td></tr></table></div>
+  </div>
+</section>
+
+<!-- 5. АРХИТЕКТУРА -->
+<section class="slide" data-title="Архитектура">
+  <h2><small>Как это устроено</small>Архитектура системы</h2>
+  <p class="sub">Решение об открытии принимается у двери. Сервер нужен только для журнала, уведомлений и администрирования.</p>
+  <svg viewBox="0 0 1140 420" width="1136" height="420" id="archSvg">
+    <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#38bdf8"/></marker></defs>
+    <rect x="0" y="0" width="1140" height="190" rx="16" fill="#38bdf80c" stroke="#38bdf840" stroke-dasharray="6 6"/>
+    <text x="16" y="24" font-size="13" fill="#38bdf8" font-weight="700" letter-spacing="1.5">У ДВЕРИ · РАБОТАЕТ ОФЛАЙН</text>
+    <rect x="0" y="220" width="1140" height="190" rx="16" fill="#a78bfa0c" stroke="#a78bfa40" stroke-dasharray="6 6"/>
+    <text x="16" y="244" font-size="13" fill="#a78bfa" font-weight="700" letter-spacing="1.5">СЕРВЕР · ЖУРНАЛ И УВЕДОМЛЕНИЯ</text>
+    <g fill="#34d399">
+      <circle r="5"><animateMotion dur="4s" repeatCount="indefinite" path="M115 105 H1000"/></circle>
+      <circle r="5" fill="#a78bfa"><animateMotion dur="4s" begin="1s" repeatCount="indefinite" path="M395 150 V250 H1000"/></circle>
+    </g>
+    <g id="archNodes"></g>
+
+  </svg>
+</section>
+
+<!-- 6. РАСПОЗНАВАНИЕ -->
+<section class="slide" data-title="Распознавание">
+  <h2><small>Компьютерное зрение</small>Как машина узнаёт лицо</h2>
+  <p class="sub">Сравниваются не фотографии, а «отпечатки лица»: векторы из 128 чисел.</p>
+  <svg viewBox="0 0 1136 300" width="1136" height="300">
+    <defs><marker id="a6" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9z" fill="#8fa0c4"/></marker></defs>
+    <!-- кадр -->
+    <rect x="0" y="20" width="220" height="250" rx="12" fill="#121b2e" stroke="#26365a"/>
+    <g transform="translate(110 150)">
+      <ellipse rx="62" ry="80" fill="#d9a77f"/><path d="M-62 -14 C-66 -90 66 -90 62 -14 C54 -58 -54 -58 -62 -14Z" fill="#2b1a10"/>
+      <ellipse cx="-22" cy="0" rx="8" ry="5" fill="#111"/><ellipse cx="22" cy="0" rx="8" ry="5" fill="#111"/>
+      <path d="M-16 42 Q0 52 16 42" stroke="#8a4b3b" stroke-width="3" fill="none"/>
+      <path d="M-80 -100h24M-80 -100v24M80 -100h-24M80 -100v24M-80 100h24M-80 100v-24M80 100h-24M80 100v-24" stroke="#38bdf8" stroke-width="3" fill="none"/>
+      <g fill="#34d399" id="lmk"></g>
+    </g>
+    <text x="110" y="292" text-anchor="middle" font-size="14" fill="#8fa0c4">1–2. Детекция + ключевые точки</text>
+    <path d="M232 145 H292" stroke="#8fa0c4" stroke-width="2" marker-end="url(#a6)"/>
+    <!-- выровненное лицо -->
+    <rect x="300" y="60" width="150" height="170" rx="10" fill="#121b2e" stroke="#26365a"/>
+    <g transform="translate(375 145) scale(.72)"><ellipse rx="62" ry="80" fill="#c9a07c"/><ellipse cx="-22" cy="0" rx="8" ry="5" fill="#111"/><ellipse cx="22" cy="0" rx="8" ry="5" fill="#111"/><path d="M-16 42 Q0 52 16 42" stroke="#8a4b3b" stroke-width="3" fill="none"/></g>
+    <text x="375" y="252" text-anchor="middle" font-size="14" fill="#8fa0c4">3. Выравнивание 150×150</text>
+    <path d="M462 145 H522" stroke="#8fa0c4" stroke-width="2" marker-end="url(#a6)"/>
+    <!-- нейросеть -->
+    <g id="nn" transform="translate(530 50)"></g>
+    <text x="620" y="252" text-anchor="middle" font-size="14" fill="#8fa0c4">4. Нейросеть (ResNet)</text>
+    <path d="M712 145 H762" stroke="#8fa0c4" stroke-width="2" marker-end="url(#a6)"/>
+    <!-- вектор -->
+    <rect x="770" y="70" width="150" height="150" rx="10" fill="#121b2e" stroke="#26365a"/>
+    <g id="vec" transform="translate(780 145)"></g>
+    <text x="845" y="252" text-anchor="middle" font-size="14" fill="#8fa0c4">5. Вектор: 128 чисел</text>
+    <path d="M930 145 H970" stroke="#8fa0c4" stroke-width="2" marker-end="url(#a6)"/>
+    <text x="1055" y="62" text-anchor="middle" font-size="14" fill="#8fa0c4">6. Расстояние до базы</text>
+  </svg>
+  <div style="position:absolute;right:72px;top:262px;width:170px">
+    <table style="font-size:14px"><tr><td>Айгерим</td><td class="yes">0.31 ✓</td></tr><tr><td>Тимур</td><td>0.58</td></tr><tr><td>Данияр</td><td>0.66</td></tr><tr><td>Алия</td><td>0.72</td></tr></table>
+  </div>
+  <div class="grid g3" style="margin-top:6px">
+    <div class="card"><p><b class="c-cyan">Порог 0.45:</b> если расстояние меньше, это тот же человек. Меньший порог строже: меньше чужих, но больше ложных отказов.</p></div>
+    <div class="card"><p><b class="c-green">Регистрация:</b> 3–5 фото человека, в базе хранится только средний вектор, без самих фото.</p></div>
+    <div class="card"><p><b class="c-amber">Библиотеки:</b> OpenCV, face_recognition (dlib). Вариант для скорости: MediaPipe + MobileFaceNet.</p></div>
+  </div>
+</section>
+
+<!-- 7. ЖЕЛЕЗО -->
+<section class="slide" data-title="Железо">
+  <h2><small>Компоненты</small>Железо</h2>
+  <div class="grid g4" style="margin-top:14px">
+    <div class="card" style="text-align:center">
+      <svg viewBox="0 0 200 130" width="100%" height="120">
+        <rect x="10" y="15" width="180" height="105" rx="6" fill="#1f7a3f" stroke="#145a2c" stroke-width="2"/>
+        
+        <rect x="20" y="20" width="120" height="10" fill="#0c0c0c"/><g fill="#d4a93f" id="piPins"></g>
+        <rect x="70" y="52" width="40" height="40" rx="2" fill="#c4ccd6"/><text x="90" y="76" text-anchor="middle" font-size="8" font-weight="800" fill="#223">BCM2711</text>
+        <rect x="150" y="30" width="38" height="26" fill="#b9c1cc"/><rect x="150" y="62" width="38" height="24" fill="#b9c1cc"/><rect x="150" y="90" width="38" height="24" fill="#9aa3ad"/>
+        <rect x="20" y="96" width="34" height="18" rx="2" fill="#2a2f38"/><text x="37" y="108" text-anchor="middle" font-size="6" fill="#9aa">CSI</text>
+      </svg>
+      <h3>Raspberry Pi 4</h3><p class="muted">Мозг системы: распознавание и GPIO</p>
+      <p style="margin-top:8px"><span class="tag c-green">4 ядра</span> <span class="tag c-green">2–4 ГБ</span></p>
+    </div>
+    <div class="card" style="text-align:center">
+      <svg viewBox="0 0 200 130" width="100%" height="120">
+        <path d="M80 100 h40 v30 h-40z" fill="#e5b84b" opacity=".85"/>
+        <rect x="55" y="15" width="90" height="90" rx="6" fill="#1f7a3f" stroke="#145a2c" stroke-width="2"/>
+        <rect x="80" y="38" width="40" height="40" rx="4" fill="#1a1a1a"/><circle cx="100" cy="58" r="14" fill="#0a0a0a" stroke="#555" stroke-width="2"/><circle cx="100" cy="58" r="6" fill="#1e3a8a"/><circle cx="96" cy="54" r="2" fill="#fff" opacity=".7"/>
+        <circle cx="62" cy="22" r="3" fill="#cbd"/><circle cx="138" cy="22" r="3" fill="#cbd"/><circle cx="62" cy="98" r="3" fill="#cbd"/><circle cx="138" cy="98" r="3" fill="#cbd"/>
+      </svg>
+      <h3>Camera Module 3</h3><p class="muted">12 Мп, автофокус, есть NoIR</p>
+      <p style="margin-top:8px"><span class="tag c-cyan">CSI</span> <span class="tag c-cyan">≈ 25 $</span></p>
+    </div>
+    <div class="card" style="text-align:center">
+      <svg viewBox="0 0 200 130" width="100%" height="120">
+        <rect x="40" y="30" width="110" height="70" rx="5" fill="url(#mtl)" stroke="#6b7280" stroke-width="2"/>
+        <defs><linearGradient id="mtl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3e8ee"/><stop offset="1" stop-color="#8f99a6"/></linearGradient></defs>
+        <path d="M150 50 h28 l8 10 v10 h-36z" fill="#d1d5db" stroke="#6b7280" stroke-width="2"><animate attributeName="d" values="M150 50 h28 l8 10 v10 h-36z;M150 50 h4 l8 10 v10 h-12z;M150 50 h28 l8 10 v10 h-36z" dur="3s" repeatCount="indefinite"/></path>
+        <circle cx="52" cy="42" r="4" fill="#6b7280"/><circle cx="138" cy="88" r="4" fill="#6b7280"/>
+        <path d="M60 100 C60 120 30 118 20 124" stroke="#ef4444" stroke-width="3" fill="none"/><path d="M70 100 C70 124 40 124 26 128" stroke="#111" stroke-width="3" fill="none"/>
+      </svg>
+      <h3>Соленоидный замок</h3><p class="muted">12 В, ригель втягивается под током</p>
+      <p style="margin-top:8px"><span class="tag c-amber">12 В · 0.6 А</span></p>
+    </div>
+    <div class="card" style="text-align:center">
+      <svg viewBox="0 0 200 130" width="100%" height="120">
+        <rect x="25" y="25" width="150" height="85" rx="5" fill="#1f4fa8" stroke="#163a7d" stroke-width="2"/>
+        <rect x="45" y="38" width="72" height="56" rx="3" fill="#1d4ed8" stroke="#0f2f80"/><text x="81" y="64" text-anchor="middle" font-size="9" fill="#dbeafe" font-weight="700">SRD-05VDC</text><text x="81" y="78" text-anchor="middle" font-size="7" fill="#bfdbfe">10A 250VAC</text>
+        <rect x="128" y="40" width="38" height="52" rx="2" fill="#2563eb"/><circle cx="147" cy="50" r="5" fill="#cbd5e1"/><circle cx="147" cy="66" r="5" fill="#cbd5e1"/><circle cx="147" cy="82" r="5" fill="#cbd5e1"/>
+        <circle cx="35" cy="100" r="3" fill="#ef4444" class="pulse"/>
+      </svg>
+      <h3>Модуль реле</h3><p class="muted">Pi управляет 12 В через оптрон</p>
+      <p style="margin-top:8px"><span class="tag c-violet">5 В · 1 канал</span></p>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card"><h3>👁 PIR HC-SR501</h3><p>Видит движение до 7 м и будит камеру, чтобы Pi не распознавал впустую.</p></div>
+    <div class="card"><h3>🧲 Геркон</h3><p>Показывает, закрыта ли дверь. Если дверь открыта дольше 30 с, приходит предупреждение.</p></div>
+    <div class="card"><h3>🔔 Зуммер + LED</h3><p>Зелёный: доступ разрешён. Красный с сигналом: отказ.</p></div>
+  </div>
+</section>
+
+<!-- 8. СХЕМА -->
+<section class="slide" data-title="Подключение">
+  <h2><small>Монтаж</small>Схема подключения</h2>
+  <div class="grid" style="grid-template-columns:1.35fr 1fr;margin-top:8px">
+    <svg viewBox="0 0 680 450" width="100%">
+      <!-- Pi -->
+      <rect x="220" y="40" width="200" height="320" rx="10" fill="#1f7a3f" stroke="#34d399" stroke-width="2"/>
+      <text x="320" y="72" text-anchor="middle" font-size="19" font-weight="800" fill="#e8eefc">Raspberry Pi 4</text>
+      <rect x="240" y="300" width="110" height="30" rx="3" fill="#2a2f38"/><text x="295" y="320" text-anchor="middle" font-size="12" fill="#cbd5e1">CSI ← камера</text>
+      <g font-size="13" fill="#e8eefc">
+        <circle cx="220" cy="110" r="5" fill="#e5b84b"/><text x="232" y="115">5V (pin 2)</text>
+        <circle cx="220" cy="145" r="5" fill="#e5b84b"/><text x="232" y="150">GPIO4 (pin 7)</text>
+        <circle cx="220" cy="180" r="5" fill="#e5b84b"/><text x="232" y="185">GND (pin 6)</text>
+        <circle cx="220" cy="215" r="5" fill="#e5b84b"/><text x="232" y="220">GPIO27 (13)</text>
+        <circle cx="420" cy="110" r="5" fill="#e5b84b"/><text x="408" y="115" text-anchor="end">GPIO17 (pin 11)</text>
+        <circle cx="420" cy="145" r="5" fill="#e5b84b"/><text x="408" y="150" text-anchor="end">5V (pin 4)</text>
+        <circle cx="420" cy="180" r="5" fill="#e5b84b"/><text x="408" y="185" text-anchor="end">GND (pin 9)</text>
+        <circle cx="420" cy="215" r="5" fill="#e5b84b"/><text x="408" y="220" text-anchor="end">GPIO22–24</text>
+      </g>
+      <!-- PIR -->
+      <rect x="20" y="90" width="120" height="80" rx="8" fill="#e5e7eb"/><circle cx="80" cy="112" r="18" fill="#fff" stroke="#cbd5e1"/><text x="80" y="160" text-anchor="middle" font-size="13" font-weight="800" fill="#334">PIR</text>
+      <!-- геркон -->
+      <rect x="20" y="200" width="120" height="40" rx="8" fill="#334155"/><text x="80" y="225" text-anchor="middle" font-size="13" font-weight="700" fill="#e8eefc">Геркон</text>
+      <!-- реле -->
+      <rect x="500" y="80" width="150" height="120" rx="8" fill="#1f4fa8"/><text x="575" y="110" text-anchor="middle" font-size="15" font-weight="800" fill="#e8eefc">Реле</text>
+      <g font-size="11" fill="#dbeafe"><text x="508" y="135">IN</text><text x="508" y="160">VCC</text><text x="508" y="185">GND</text><text x="642" y="150" text-anchor="end">COM</text><text x="642" y="180" text-anchor="end">NO</text></g>
+      <!-- замок, БП -->
+      <rect x="480" y="300" width="180" height="60" rx="8" fill="url(#mtl2)"/><defs><linearGradient id="mtl2" x1="0" x2="1"><stop offset="0" stop-color="#e3e8ee"/><stop offset="1" stop-color="#8f99a6"/></linearGradient></defs>
+      <text x="570" y="336" text-anchor="middle" font-size="14" font-weight="800" fill="#1f2937">Замок 12 В</text>
+      <rect x="480" y="390" width="180" height="44" rx="8" fill="#111827" stroke="#fbbf24"/><text x="570" y="417" text-anchor="middle" font-size="13" font-weight="700" fill="#fbbf24">БП 12 В 2 А</text>
+      <path d="M455 300 v60" stroke="#e5e7eb" stroke-width="2"/><path d="M447 322 h16 l-8 14z" fill="#e5e7eb"/><rect x="447" y="318" width="16" height="3" fill="#e5e7eb"/><text x="440" y="350" text-anchor="end" font-size="11" fill="#cbd5e1">1N4007</text>
+      <g fill="none" stroke-width="3" stroke-linecap="round">
+        <path d="M140 110 H180 V110 H220" stroke="#ef4444"/>
+        <path d="M140 130 H190 V145 H220" stroke="#facc15"/>
+        <path d="M140 150 H200 V180 H220" stroke="#6b7280"/>
+        <path d="M140 220 H220" stroke="#38bdf8"/>
+        <path d="M420 110 H470 V132 H500" stroke="#22c55e"/>
+        <path d="M420 145 H480 V157 H500" stroke="#ef4444"/>
+        <path d="M420 180 H500" stroke="#6b7280"/>
+        <path d="M650 147 H668 V412 H660" stroke="#fbbf24"/>
+        <path d="M650 177 H662 V290 H600 V300" stroke="#fbbf24"/>
+        <path d="M540 360 V390" stroke="#6b7280"/>
+        <path d="M455 300 V292 H600" stroke="#fbbf24" stroke-width="2"/><path d="M455 360 V375 H540" stroke="#6b7280" stroke-width="2"/>
+      </g>
+      <text x="20" y="400" font-size="12" fill="#8fa0c4">Красный — 5 В · Жёлтый — 12 В / сигнал</text>
+      <text x="20" y="420" font-size="12" fill="#8fa0c4">Серый — земля · Зелёный — управление реле</text>
+    </svg>
+    <div>
+      <table style="font-size:14.5px"><tr><th>Устройство</th><th>Pi</th></tr>
+        <tr><td>Реле IN</td><td>GPIO17</td></tr><tr><td>Реле VCC / GND</td><td>5V / GND</td></tr>
+        <tr><td>PIR OUT</td><td>GPIO4</td></tr><tr><td>Геркон</td><td>GPIO27 + подтяжка</td></tr>
+        <tr><td>Зуммер</td><td>GPIO22</td></tr><tr><td>LED зелёный / красный</td><td>GPIO23 / 24 (330 Ом)</td></tr>
+        <tr><td>Камера</td><td>CSI-шлейф</td></tr></table>
+      <div class="card" style="margin-top:12px"><p style="font-size:14.5px">⚡ <b>12 В и Pi гальванически развязаны</b> реле с оптроном. Диод 1N4007 параллельно катушке замка гасит выброс напряжения при отключении.</p></div>
+      <div class="card" style="margin-top:10px"><p style="font-size:14.5px">🔥 <b>Изнутри дверь всегда открывается механической ручкой</b>, даже без питания. Это требование пожарной безопасности.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 9. КОД -->
+<section class="slide" data-title="Код">
+  <h2><small>Программа на Raspberry Pi</small>Код распознавания (Python)</h2>
+  <div class="grid" style="grid-template-columns:1.55fr 1fr;margin-top:6px">
+<pre><span class="k">import</span> cv2, json, time, numpy <span class="k">as</span> np, face_recognition
+<span class="k">from</span> picamera2 <span class="k">import</span> Picamera2
+<span class="k">from</span> gpiozero <span class="k">import</span> OutputDevice, MotionSensor
+<span class="k">import</span> paho.mqtt.publish <span class="k">as</span> mqtt
+
+lock = OutputDevice(<span class="n">17</span>)              <span class="cm"># реле замка</span>
+pir  = MotionSensor(<span class="n">4</span>)
+db   = np.load(<span class="s">"faces.npz"</span>)          <span class="cm"># names[], enc[N,128]</span>
+cam  = Picamera2()
+cam.configure(cam.create_preview_configuration(
+    main={<span class="s">"size"</span>: (<span class="n">640</span>, <span class="n">480</span>), <span class="s">"format"</span>: <span class="s">"RGB888"</span>}))
+cam.start()
+THRESHOLD = <span class="n">0.45</span>
+
+<span class="k">def</span> <span class="f">check_face</span>():
+    frame = cv2.cvtColor(cam.capture_array(), cv2.COLOR_BGR2RGB)
+    boxes = face_recognition.face_locations(frame, model=<span class="s">"hog"</span>)
+    <span class="k">for</span> enc <span class="k">in</span> face_recognition.face_encodings(frame, boxes):
+        d = face_recognition.face_distance(db[<span class="s">"enc"</span>], enc)
+        i = int(np.argmin(d))
+        <span class="k">if</span> d[i] &lt; THRESHOLD <span class="k">and</span> <span class="f">is_live</span>(cam):   <span class="cm"># моргание</span>
+            <span class="k">return</span> db[<span class="s">"names"</span>][i], float(d[i])
+    <span class="k">return</span> <span class="k">None</span>, <span class="k">None</span>
+
+<span class="k">while</span> <span class="k">True</span>:
+    pir.wait_for_motion()
+    name, dist = <span class="f">check_face</span>()
+    event = {<span class="s">"type"</span>: <span class="s">"open"</span> <span class="k">if</span> name <span class="k">else</span> <span class="s">"deny"</span>, <span class="s">"who"</span>: name, <span class="s">"dist"</span>: dist}
+    mqtt.single(<span class="s">"lab502/door/event"</span>, json.dumps(event), hostname=<span class="s">"server"</span>)
+    <span class="k">if</span> name:
+        lock.on(); time.sleep(<span class="n">3</span>); lock.off()</pre>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card"><h3 class="c-cyan">Проверка живости</h3><p><code>is_live()</code> снимает 1–2 секунды кадров и считает <b>EAR</b>, коэффициент открытости глаз. Фото не моргает, поэтому EAR не падает и проверка не проходит.</p></div>
+      <div class="card"><h3 class="c-green">Скорость на Pi 4</h3><p>Кадр уменьшаем до 320×240 и детектируем методом HOG. Ожидаем около 0.5–1 с на одно распознавание.</p></div>
+      <div class="card"><h3 class="c-amber">Регистрация</h3><p><code>enroll.py</code> делает 5 снимков, считает средний вектор и записывает его в <code>faces.npz</code>. Сами фото не сохраняет.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. MQTT + TELEGRAM -->
+<section class="slide" data-title="MQTT и Telegram">
+  <h2><small>Связь</small>События, MQTT и Telegram-бот</h2>
+  <div class="grid g2" style="margin-top:10px">
+    <div>
+      <div class="card" style="margin-bottom:12px"><h3>Топики</h3>
+        <table style="font-size:14.5px"><tr><td><code>lab502/door/event</code></td><td>open / deny / spoof</td></tr>
+        <tr><td><code>lab502/door/state</code></td><td>открыта / закрыта (геркон)</td></tr>
+        <tr><td><code>lab502/door/cmd</code></td><td>удалённое открытие (только от сервера)</td></tr>
+        <tr><td><code>lab502/door/status</code></td><td>online / offline (LWT)</td></tr></table></div>
+      <h3 style="margin:4px 0 8px;font-size:17px">Живой поток событий</h3>
+      <div class="stream" id="stream"></div>
+      <p class="muted" style="font-size:14px;margin-top:8px">MQTT работает через TLS (порт 8883), с логином и ACL: замок может только публиковать события и читать свои команды.</p>
+    </div>
+    <div style="display:flex;gap:18px;align-items:flex-start">
+      <div class="phone" style="height:460px;width:270px;flex:none">
+        <div class="hd"><div class="av">🚪</div><div><b>Lab502 Door Bot</b><span>бот</span></div></div>
+        <div class="msgs">
+          <div class="msg ok">🔓 <b>Вход: Айгерим</b><br>сходство 0.69 · живость ✓<i>09:12</i></div>
+          <div class="msg red">🚫 <b>Неизвестное лицо у двери</b><div class="ph">👤</div><div class="kb"><button>🔓 Открыть</button><button>🚫 Игнор</button></div><i>13:47</i></div>
+          <div class="msg warn">⚠️ <b>Попытка обмана</b><br>лицо на экране телефона<i>15:03</i></div>
+        </div>
+      </div>
+      <div class="card" style="font-size:14px"><h3>Бот умеет</h3><ul><li>журнал входов</li><li>фото незнакомцев</li><li>кнопку «Открыть» (только для админов из белого списка, команда действует 30 с)</li><li><code>/log</code>: входы за сегодня</li><li>предупреждение «дверь открыта дольше 30 с»</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. ДЕМО -->
+<section class="slide" data-title="Живое демо" id="demoSlide">
+  <h2 style="margin-bottom:10px"><small>Живое демо (симуляция)</small>Кто стоит у двери?</h2>
+  <div style="display:grid;grid-template-columns:560px 1fr 250px;gap:18px">
+    <div>
+      <div style="border-radius:14px;overflow:hidden;border:1px solid var(--line);position:relative">
+        <canvas id="cam" style="width:560px;height:370px;display:block"></canvas>
+        <span class="tag c-red" style="position:absolute;left:12px;top:10px;background:#000a">● REC · cam0</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn on" data-who="known">🙂 Айгерим (в базе)</button>
+        <button class="btn" data-who="unknown">👤 Незнакомец</button>
+        <button class="btn" data-who="spoof">📱 Фото на телефоне</button>
+      </div>
+    </div>
+    <div>
+      <div class="steps" id="steps"></div>
+      <div class="card" style="margin-top:10px;padding:12px 14px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)"><span>Расстояние до ближайшего в базе</span><b id="dVal" style="color:var(--text)">—</b></div>
+        <div style="position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#34d399 0 45%,#f87171 45% 100%);margin-top:8px;opacity:.85">
+          <div id="dMark" style="position:absolute;top:-4px;width:4px;height:20px;background:#fff;border-radius:2px;left:0;transition:left .6s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px"><span>0</span><span>порог 0.45</span><span>1.0</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
+        <svg viewBox="0 0 60 70" width="54" height="62"><path id="shackle" d="M16 32 v-10 a14 14 0 0 1 28 0 v10" stroke="#f87171" stroke-width="7" fill="none"/><rect id="lockBody" x="8" y="30" width="44" height="34" rx="6" fill="#f87171"/><circle cx="30" cy="46" r="5" fill="#0b1220"/></svg>
+        <div><div id="lockTxt" style="font-weight:800;font-size:20px" class="c-red">Закрыто</div><div class="muted" style="font-size:13px" id="liveTxt">Живость: —</div></div>
+      </div>
+    </div>
+    <div class="phone" style="width:250px;height:470px">
+      <div class="hd"><div class="av">🚪</div><div><b>Lab502 Door Bot</b><span>бот</span></div></div>
+      <div class="msgs" id="msgs"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12. БЕЗОПАСНОСТЬ -->
+<section class="slide" data-title="Безопасность">
+  <h2><small>Самое важное</small>Безопасность и защита от обмана</h2>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h3 class="c-amber">📱 Фото и видео</h3><ul><li>Проверка моргания (EAR)</li><li>Просьба повернуть голову (случайная)</li><li>Следующий шаг: ИК-камера NoIR, на ИК-снимке экран телефона тёмный</li></ul></div>
+    <div class="card"><h3 class="c-red">🔥 Пожарная безопасность</h3><ul><li>Механическая ручка изнутри</li><li>Замок «нормально закрыт» (fail-secure), но выход есть всегда</li><li>Кнопка выхода у двери</li></ul></div>
+    <div class="card"><h3 class="c-cyan">🔑 Резервный доступ</h3><ul><li>Обычный ключ остаётся</li><li>PIN или RFID как второй способ (опция)</li><li>Удалённое открытие админом</li></ul></div>
+    <div class="card"><h3 class="c-violet">🛡 Сеть</h3><ul><li>MQTT по TLS, логин, ACL</li><li>Решение принимается на Pi: без сети замок работает</li><li>Бот отвечает только chat_id из белого списка</li></ul></div>
+    <div class="card"><h3 class="c-green">👤 Персональные данные</h3><ul><li>Только письменное согласие участников</li><li>Храним векторы, а не фото</li><li>Удаление по первому запросу</li><li>Фото незнакомцев хранятся 30 дней</li></ul></div>
+    <div class="card"><h3>📋 Аудит</h3><ul><li>Каждое событие в журнале (SQLite)</li><li>Кто, когда, расстояние, живость</li><li>Еженедельный отчёт в Telegram</li></ul></div>
+  </div>
+</section>
+
+<!-- 13. ТЕСТЫ -->
+<section class="slide" data-title="Тестирование">
+  <h2><small>Как проверим</small>Тестирование и выбор порога</h2>
+  <p class="sub">Чем выше порог, тем чаще пускаем чужих (FAR). Чем ниже, тем чаще не пускаем своих (FRR). Ищем баланс.</p>
+  <div class="grid" style="grid-template-columns:1.5fr 1fr">
+    <div class="card" style="padding:14px"><canvas id="chFar" style="width:100%;height:320px;display:block"></canvas>
+      <p class="muted" style="font-size:13px;margin-top:6px">Иллюстративная модель. Реальные кривые построим по результатам тестов.</p></div>
+    <div class="card"><h3>План испытаний</h3>
+      <table style="font-size:14.5px">
+        <tr><td>Участников в базе</td><td><b>10</b></td></tr>
+        <tr><td>Попыток «своих»</td><td><b>10 × 20 = 200</b></td></tr>
+        <tr><td>Попыток «чужих»</td><td><b>200</b></td></tr>
+        <tr><td>Атак фото / видео</td><td><b>40 / 20</b></td></tr>
+        <tr><td>Освещение</td><td>день · вечер · контровой свет</td></tr>
+        <tr><td>Помехи</td><td>очки · маска · кепка</td></tr>
+      </table>
+      <p style="font-size:14.5px;margin-top:10px">Результат: таблица FAR/FRR для порогов 0.35–0.60 и итоговый выбранный порог.</p></div>
+  </div>
+</section>
+
+<!-- 14. ПЛАН -->
+<section class="slide" data-title="План">
+  <h2><small>Организация</small>План работ и роли</h2>
+  <p class="sub">5 недель, 4 участника.</p>
+  <div class="gantt">
+    <div></div><div class="h">Нед. 1</div><div class="h">Нед. 2</div><div class="h">Нед. 3</div><div class="h">Нед. 4</div><div class="h">Нед. 5</div>
+    <div>🔧 Железо и замок</div><div class="bar" style="grid-column:2/4;background:var(--amber)">Pi, реле, замок, PIR, геркон</div><div style="grid-column:4/7"></div>
+    <div>🧠 Распознавание</div><div></div><div class="bar" style="grid-column:3/6;background:var(--cyan)">face_recognition, живость, порог</div><div></div>
+    <div>🖥 Сервер и бот</div><div style="grid-column:2/4"></div><div class="bar" style="grid-column:4/6;background:var(--violet)">MQTT, FastAPI, Telegram</div><div></div>
+    <div>📦 Корпус и тесты</div><div style="grid-column:2/5"></div><div class="bar" style="grid-column:5/7;background:var(--green)">Корпус, 460 попыток, защита</div>
+  </div>
+  <div class="grid g4" style="margin-top:26px">
+    <div class="card"><h3>🔧 Участник 1</h3><p>Электрика: реле, питание 12 В / 5 В, замок, датчики</p></div>
+    <div class="card"><h3>🧠 Участник 2</h3><p>Компьютерное зрение: распознавание, живость, скорость</p></div>
+    <div class="card"><h3>🖥 Участник 3</h3><p>Mosquitto, FastAPI, SQLite, Telegram-бот, веб-панель</p></div>
+    <div class="card"><h3>📦 Участник 4</h3><p>Корпус (3D-печать), тест-план, документация, презентация</p></div>
+  </div>
+</section>
+
+<!-- 15. БЮДЖЕТ И РИСКИ -->
+<section class="slide" data-title="Бюджет и риски">
+  <h2><small>Ресурсы</small>Бюджет и риски</h2>
+  <div class="grid" style="grid-template-columns:.9fr 1.1fr;margin-top:12px">
+    <div class="card"><h3>Бюджет (ориентировочно)</h3>
+      <table style="font-size:14.5px">
+        <tr><td>Raspberry Pi 4 (2 ГБ)</td><td style="text-align:right">≈ 45 $</td></tr>
+        <tr><td>Camera Module 3</td><td style="text-align:right">≈ 25 $</td></tr>
+        <tr><td>Соленоидный замок 12 В</td><td style="text-align:right">≈ 8 $</td></tr>
+        <tr><td>Реле, PIR, геркон, LED, зуммер</td><td style="text-align:right">≈ 7 $</td></tr>
+        <tr><td>БП 12 В + DC-DC 5 В 3 А</td><td style="text-align:right">≈ 10 $</td></tr>
+        <tr><td>microSD, провода, корпус</td><td style="text-align:right">≈ 10 $</td></tr>
+        <tr><td><b>Итого</b></td><td style="text-align:right"><b class="c-green">≈ 105 $</b></td></tr>
+      </table>
+      <p class="muted" style="font-size:13px;margin-top:8px">Цены приблизительные, проверьте у поставщика.</p></div>
+    <div class="card"><h3>Риски и меры</h3>
+      <table style="font-size:14px">
+        <tr><td>Обман фото или видео</td><td>Живость, ИК-камера, строгий порог</td></tr>
+        <tr><td>Плохое освещение</td><td>ИК-подсветка, выравнивание гистограммы</td></tr>
+        <tr><td>Нет питания</td><td>Механический выход, ключ, ИБП</td></tr>
+        <tr><td>Нет сети</td><td>Решение на Pi, очередь событий</td></tr>
+        <tr><td>Утечка биометрии</td><td>Только векторы, шифрование диска</td></tr>
+        <tr><td>Не пускает своих</td><td>5 фото при регистрации, резервный способ</td></tr>
+      </table></div>
+  </div>
+</section>
+
+<!-- 16. ИТОГИ -->
+<section class="slide" data-title="Итоги">
+  <div style="display:flex;height:100%;align-items:center;gap:50px">
+    <div style="flex:1.1">
+      <span class="tag c-green">ИТОГИ</span>
+      <h2 style="font-size:50px;margin:18px 0 20px">Что получим</h2>
+      <ul style="list-style:none;display:grid;gap:12px">
+        <li>✅ Замок открывается лицом меньше чем за 2 секунды</li>
+        <li>✅ Защита от фото благодаря проверке живости</li>
+        <li>✅ Журнал входов и фото незнакомцев в Telegram</li>
+        <li>✅ Работает без интернета, стоит ≈ 105 $</li>
+      </ul>
+      <h3 class="c-cyan" style="margin:26px 0 8px">Дальше</h3>
+      <p class="muted">ИК-камера и камера глубины · несколько дверей · расписание доступа · интеграция с системой учёта посещаемости</p>
+    </div>
+    <div style="flex:.9;text-align:center">
+      <div style="font-size:96px">🚪🙂</div>
+      <h1 style="font-size:54px;margin-top:10px">Вопросы?</h1>
+      <p class="muted" style="margin-top:12px">Спасибо за внимание</p>
+    </div>
+  </div>
+</section>
+
+<div id="dots"></div><div id="num"></div>
+</div>
+<div id="hint">← → листать · F — полный экран · 1/2/3 в демо — кто у двери</div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="scene3d.js"></script>
+<script>
+/* ---------- навигация ---------- */
+const stage=document.getElementById('stage'), slides=[...document.querySelectorAll('.slide')];
+const dots=document.getElementById('dots'), num=document.getElementById('num'), bar=document.getElementById('bar');
+let cur=0;
+slides.forEach((s,i)=>{const d=document.createElement('i');d.title=s.dataset.title||'';d.onclick=()=>go(i);dots.appendChild(d)});
+function go(i){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,k)=>{s.classList.toggle('active',k===cur);s.classList.toggle('past',k<cur)});
+  [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===cur));
+  num.textContent=(cur+1)+' / '+slides.length;
+  bar.style.width=((cur+1)/slides.length*100)+'%';
+  history.replaceState(null,'','#'+(cur+1));
+  const id=slides[cur].id, title=slides[cur].dataset.title;
+  if(title==='Тестирование') requestAnimationFrame(drawFar);
+  if(id==='demoSlide'){ if(!D.started){D.started=true;runDemo('known')} }
+  if(window.FaceLock3D){
+    if(id==='scene3dSlide'){ if(FaceLock3D.mount(document.getElementById('scene3d'),on3d)) FaceLock3D.start(); }
+    else FaceLock3D.stop();
+  }
+}
+function fit(){const k=Math.min(innerWidth/1280,innerHeight/720);stage.style.transform='scale('+k+')'}
+addEventListener('resize',fit);fit();
+addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();go(cur+1)}
+  else if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(cur-1)}
+  else if(e.key==='Home')go(0); else if(e.key==='End')go(slides.length-1);
+  else if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+  else if(slides[cur].id==='demoSlide'&&['1','2','3'].includes(e.key))runDemo(['known','unknown','spoof'][+e.key-1]);
+});
+let tx=null;addEventListener('touchstart',e=>tx=e.target.closest('#scene3d,#cam')?null:e.touches[0].clientX);
+addEventListener('touchend',e=>{if(tx===null)return;const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>50)go(cur+(d<0?1:-1));tx=null});
+
+/* ---------- 3D: подписи состояния ---------- */
+function on3d(s){
+  const w=document.getElementById('s3who'),p=document.getElementById('s3phase');
+  w.textContent={known:'🙂 ',unknown:'👤 ',spoof:'📱 '}[s.kind]+s.who;
+  const map={idle:['Ожидание','var(--muted)'],motion:['PIR: движение','var(--cyan)'],scan:['Распознавание…','var(--cyan)'],
+    ok:['✓ Доступ разрешён · '+s.dist.toFixed(2),'var(--green)'],open:['🔓 Дверь открыта','var(--green)'],
+    deny:['✗ Нет в базе · '+s.dist.toFixed(2),'var(--red)'],spoof:['⚠ Фото: живость не пройдена','var(--amber)'],leave:['Ожидание','var(--muted)']};
+  const [t,c]=map[s.phase]||map.idle; p.textContent=t; p.style.color=c;
+}
+document.getElementById('s3rot').onclick=e=>{if(!window.FaceLock3D)return;const on=FaceLock3D.toggleRotate();e.target.textContent=on?'⏸ Вращение':'▶ Вращение'};
+
+/* ---------- архитектура ---------- */
+(function(){
+  const N=(x,y,ic,t,s,c)=>`<rect x="${x}" y="${y}" width="200" height="100" rx="14" fill="#121b2e" stroke="${c}" stroke-width="2"/>
+    <text x="${x+100}" y="${y+40}" text-anchor="middle" font-size="30">${ic}</text>
+    <text x="${x+100}" y="${y+68}" text-anchor="middle" font-size="16" font-weight="700" fill="#e8eefc">${t}</text>
+    <text x="${x+100}" y="${y+87}" text-anchor="middle" font-size="11.5" fill="#8fa0c4">${s}</text>`;
+  const A=(d,lab,lx,ly)=>`<path d="${d}" stroke="#38bdf8" stroke-width="2.5" fill="none" marker-end="url(#ar)"/>`+(lab?`<text x="${lx}" y="${ly}" text-anchor="middle" font-size="12" fill="#8fa0c4">${lab}</text>`:'');
+  let g='';
+  g+=N(15,55,'📷','Камера + PIR','Camera Module 3 · HC-SR501','#38bdf8');
+  g+=N(295,55,'🧠','Raspberry Pi 4','OpenCV · face_recognition','#34d399');
+  g+=N(575,55,'⚡','Реле','оптрон · 5 В → 12 В','#a78bfa');
+  g+=N(855,55,'🔒','Замок 12 В','соленоид + геркон','#fbbf24');
+  g+=A('M217 105 H293','CSI · GPIO4',255,95)+A('M497 105 H573','GPIO17',535,95)+A('M777 105 H853','12 В',815,95);
+  g+=N(295,275,'📡','Mosquitto','MQTT · TLS 8883','#a78bfa');
+  g+=N(575,275,'🖥','FastAPI + SQLite','журнал · веб-панель','#fb923c');
+  g+=N(855,275,'✈️','Telegram-бот','уведомления · «Открыть»','#38bdf8');
+  g+=A('M395 157 V273','door/event',440,220)+A('M497 325 H573','',0,0)+A('M777 325 H853','',0,0);
+  g+=`<path d="M675 273 V200 H420 V160" stroke="#a78bfa" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#ar)"/><text x="548" y="194" text-anchor="middle" font-size="12" fill="#a78bfa">door/cmd (удалённое открытие)</text>`;
+  document.getElementById('archNodes').innerHTML=g;
+  // точки лица на слайде «Распознавание»
+  let l='';const P=[];
+  for(let i=0;i<17;i++){const a=0.12*Math.PI+i/16*0.76*Math.PI;P.push([Math.cos(a)*58,Math.sin(a)*74+4])}
+  [[-34,-14],[-26,-18],[-18,-19],[-10,-17],[34,-14],[26,-18],[18,-19],[10,-17]].forEach(p=>P.push(p));
+  for(let i=0;i<5;i++)P.push([0,4+i*6]); [[-8,30],[-4,32],[4,32],[8,30]].forEach(p=>P.push(p));
+  for(let i=0;i<6;i++){const a=i/6*Math.PI*2;P.push([-22+Math.cos(a)*9,Math.sin(a)*5]);P.push([22+Math.cos(a)*9,Math.sin(a)*5])}
+  for(let i=0;i<12;i++){const a=i/12*Math.PI*2;P.push([Math.cos(a)*17,44+Math.sin(a)*6])}
+  P.forEach(([x,y])=>l+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2"/>`);
+  document.getElementById('lmk').innerHTML=l;
+  // нейросеть
+  let nn='';const cols=[5,7,7,4],X=[0,60,120,180];
+  cols.forEach((n,ci)=>{for(let j=0;j<n;j++){const y=100+(j-(n-1)/2)*26;
+    if(ci<cols.length-1)for(let k=0;k<cols[ci+1];k++){const y2=100+(k-(cols[ci+1]-1)/2)*26;nn+=`<line x1="${X[ci]}" y1="${y}" x2="${X[ci+1]}" y2="${y2}" stroke="#38bdf8" stroke-opacity=".18"/>`}
+    nn+=`<circle cx="${X[ci]}" cy="${y}" r="7" fill="#121b2e" stroke="${['#34d399','#38bdf8','#38bdf8','#a78bfa'][ci]}" stroke-width="2"/>`}});
+  document.getElementById('nn').innerHTML=nn;
+  let v='';for(let i=0;i<32;i++){const h=8+Math.abs(Math.sin(i*2.7)*48);v+=`<rect x="${i*4.1}" y="${-h/2}" width="3" height="${h.toFixed(1)}" fill="${i%2?'#a78bfa':'#38bdf8'}"/>`}
+  v+=`<text x="65" y="56" text-anchor="middle" font-size="11" fill="#8fa0c4">[0.12, −0.08, 0.31 …]</text>`;
+  document.getElementById('vec').innerHTML=v;
+  let pins='';for(let i=0;i<20;i++)pins+=`<circle cx="${24+i*5.9}" cy="23" r="1.8"/><circle cx="${24+i*5.9}" cy="27.5" r="1.8"/>`;
+  document.getElementById('piPins').innerHTML=pins;
+})();
+
+/* ---------- поток MQTT ---------- */
+(function(){
+  const st=document.getElementById('stream');const ev=[
+    ['door/event','{"type":"open","who":"Айгерим","dist":0.31}'],['door/state','{"door":"open"}'],['door/state','{"door":"closed"}'],
+    ['door/event','{"type":"deny","who":null,"dist":0.68}'],['door/event','{"type":"spoof","live":false}'],['door/status','"online"']];
+  let i=0;function line(){const [tp,p]=ev[i++%ev.length];const el=document.createElement('div');
+    el.innerHTML=`<span class="t">${new Date().toTimeString().slice(0,8)}</span> <span class="tp">lab502/${tp}</span> ${p}`;
+    st.appendChild(el);while(st.children.length>7)st.firstChild.remove()}
+  line();setInterval(line,1800);
+})();
+
+/* ---------- FAR / FRR ---------- */
+function drawFar(){
+  const c=document.getElementById('chFar');const w=c.clientWidth,h=c.clientHeight;c.width=w*2;c.height=h*2;const x=c.getContext('2d');x.scale(2,2);
+  const pl=46,pr=14,pt=14,pb=34,iw=w-pl-pr,ih=h-pt-pb,T0=0.25,T1=0.75;
+  const X=t=>pl+(t-T0)/(T1-T0)*iw,Y=v=>pt+ih-v/30*ih;
+  const FAR=t=>100/(1+Math.exp(-(t-0.62)/0.035)),FRR=t=>100/(1+Math.exp((t-0.33)/0.035));
+  x.font='12px sans-serif';x.fillStyle='#6f86a8';x.strokeStyle='#1e2d4d';
+  for(let v=0;v<=30;v+=5){x.beginPath();x.moveTo(pl,Y(v));x.lineTo(w-pr,Y(v));x.stroke();x.fillText(v+'%',8,Y(v)+4)}
+  for(let t=0.3;t<=0.71;t+=0.1){x.fillText(t.toFixed(1),X(t)-8,h-12)}
+  x.fillText('порог расстояния →',w-pr-120,h-12);
+  const curve=(f,col,lab)=>{x.beginPath();for(let i=0;i<=200;i++){const t=T0+(T1-T0)*i/200,v=Math.min(30,f(t));i?x.lineTo(X(t),Y(v)):x.moveTo(X(t),Y(v))}
+    x.strokeStyle=col;x.lineWidth=3;x.stroke();x.fillStyle=col;x.font='bold 13px sans-serif';x.fillText(lab,f===FAR?X(0.6):X(0.27),f===FAR?Y(22):Y(22))};
+  curve(FRR,'#fbbf24','FRR — не пустили своего');curve(FAR,'#f87171','FAR — пустили чужого');
+  x.setLineDash([6,5]);x.strokeStyle='#34d399';x.lineWidth=2;x.beginPath();x.moveTo(X(0.45),pt);x.lineTo(X(0.45),pt+ih);x.stroke();x.setLineDash([]);
+  x.fillStyle='#34d399';x.font='bold 13px sans-serif';x.fillText('выбранный порог 0.45',X(0.45)+8,pt+16);
+  x.font='12px sans-serif';x.fillText('FAR ≈ '+FAR(0.45).toFixed(1)+'% · FRR ≈ '+FRR(0.45).toFixed(1)+'%',X(0.45)+8,pt+34);
+  [[FAR,'#f87171'],[FRR,'#fbbf24']].forEach(([f,c])=>{x.fillStyle=c;x.beginPath();x.arc(X(0.45),Y(f(0.45)),5,0,7);x.fill()});
+}
+
+/* ---------- живое демо ---------- */
+const STEPS=['PIR: движение','Детекция лица','Ключевые точки','Вектор 128 чисел','Сравнение с базой','Проверка живости','Реле → замок'];
+const VIS={known:{name:'Айгерим',dist:0.31,live:true,skin:'#d9a77f',hair:'#2b1a10'},
+           unknown:{name:null,dist:0.68,live:true,skin:'#c68e6a',hair:'#141414',hood:true},
+           spoof:{name:'Айгерим',dist:0.34,live:false,skin:'#d9a77f',hair:'#2b1a10',photo:true}};
+const D={who:'known',t:0,res:null,started:false,raf:0,last:0,blink:-1,lockOpenUntil:0};
+const stepsEl=document.getElementById('steps');
+STEPS.forEach((s,i)=>{const d=document.createElement('div');d.className='step';d.innerHTML=`<b>${i+1}</b>${s}`;stepsEl.appendChild(d)});
+document.querySelectorAll('[data-who]').forEach(b=>b.onclick=()=>runDemo(b.dataset.who));
+function tgMsg(cls,html,kb){
+  const m=document.getElementById('msgs'),d=document.createElement('div');d.className='msg '+cls;
+  d.innerHTML=html+(kb?'<div class="kb"><button data-a="open">🔓 Открыть</button><button data-a="ign">🚫 Игнор</button></div>':'')+'<i>'+new Date().toTimeString().slice(0,5)+'</i>';
+  if(kb)d.querySelectorAll('button').forEach(b=>b.onclick=()=>{d.querySelector('.kb').remove();
+    if(b.dataset.a==='open'){tgMsg('ok','🔓 <b>Открыто удалённо</b><br>админ подтвердил');setLock(true);D.lockOpenUntil=performance.now()+3000}
+    else tgMsg('warn','🚫 Проигнорировано админом')});
+  m.appendChild(d);while(m.children.length>3)m.firstChild.remove();
+}
+function setLock(open){
+  const c=open?'#34d399':'#f87171';
+  document.getElementById('lockBody').setAttribute('fill',c);
+  const sh=document.getElementById('shackle');sh.setAttribute('stroke',c);sh.setAttribute('d',open?'M16 32 v-10 a14 14 0 0 1 28 0 v-8':'M16 32 v-10 a14 14 0 0 1 28 0 v10');
+  const t=document.getElementById('lockTxt');t.textContent=open?'Открыто':'Закрыто';t.className=open?'c-green':'c-red';
+}
+function runDemo(who){
+  D.who=who;D.t=0;D.res=null;D.blink=-1;D.notified=false;
+  document.querySelectorAll('[data-who]').forEach(b=>b.classList.toggle('on',b.dataset.who===who));
+  document.getElementById('dVal').textContent='—';document.getElementById('dMark').style.left='0%';
+  document.getElementById('liveTxt').textContent='Живость: —';setLock(false);
+  [...stepsEl.children].forEach(s=>s.className='step');
+  cancelAnimationFrame(D.raf);D.last=performance.now();D.raf=requestAnimationFrame(demoLoop);
+}
+const TL=[0.3,1.0,1.6,2.3,3.0,3.4,5.0]; // начало шагов, с
+function demoLoop(now){
+  const dt=Math.min(0.5,(now-D.last)/1000);D.last=now;D.t+=dt;const t=D.t,v=VIS[D.who];
+  const el=stepsEl.children;
+  for(let i=0;i<STEPS.length;i++){
+    if(D.res&&el[i].classList.contains('fail'))continue;
+    if(D.res==='deny'&&i>4||D.res==='spoof'&&i>5)continue;
+    const st=TL[i],en=TL[i+1]||6;
+    el[i].className='step'+(t>=en?' done':t>=st?' active':'');
+  }
+  if(t>=3.0&&t<3.1){document.getElementById('dVal').textContent=v.dist.toFixed(2);document.getElementById('dMark').style.left=(v.dist*100)+'%'}
+  if(!D.res&&t>=3.4&&v.dist>0.45){D.res='deny';el[4].className='step fail';el[5].className=el[6].className='step';finish(v)}
+  if(!D.res&&t>=3.4){document.getElementById('liveTxt').textContent='Живость: ждём моргание…'}
+  if(v.live&&D.blink<0&&t>4.1)D.blink=t;
+  if(!D.res&&t>=4.6&&v.live)document.getElementById('liveTxt').textContent='Живость: ✓ моргание';
+  if(!D.res&&t>=5.0&&!v.live){D.res='spoof';el[5].className='step fail';el[6].className='step';document.getElementById('liveTxt').textContent='Живость: ✗ лицо не моргает';finish(v)}
+  if(!D.res&&t>=5.0&&v.live&&v.dist<=0.45){D.res='ok';finish(v)}
+  if(D.res==='ok'&&t>5.6)el[6].className='step done';
+  if(D.lockOpenUntil&&now>D.lockOpenUntil){D.lockOpenUntil=0;setLock(false)}
+  drawCam(t,v);
+  if(t<9||D.lockOpenUntil)D.raf=requestAnimationFrame(demoLoop);
+}
+function finish(v){
+  if(D.res==='ok'){setLock(true);D.lockOpenUntil=performance.now()+3500;tgMsg('ok',`🔓 <b>Вход: ${v.name}</b><br>расстояние ${v.dist.toFixed(2)} · живость ✓`)}
+  else if(D.res==='deny')tgMsg('red','🚫 <b>Неизвестное лицо у двери</b><div class="ph">👤</div>',true);
+  else tgMsg('warn','⚠️ <b>Попытка обмана</b><br>лицо на экране, моргания нет<div class="ph">📱</div>');
+}
+function drawFace(x,cx,cy,s,v,eye){
+  x.fillStyle=v.hood?'#3f4654':'#2563eb';x.beginPath();x.ellipse(cx,cy+170*s,150*s,90*s,0,Math.PI,0);x.fill();
+  x.fillStyle=v.skin;x.fillRect(cx-22*s,cy+70*s,44*s,40*s);
+  if(v.hood){x.fillStyle='#3f4654';x.beginPath();x.ellipse(cx,cy-6*s,92*s,112*s,0,0,7);x.fill()}
+  x.fillStyle=v.skin;x.beginPath();x.ellipse(cx,cy,64*s,84*s,0,0,7);x.fill();
+  x.fillStyle=v.hair;x.beginPath();x.moveTo(cx-66*s,cy-8*s);x.bezierCurveTo(cx-70*s,cy-100*s,cx+70*s,cy-100*s,cx+66*s,cy-8*s);x.bezierCurveTo(cx+56*s,cy-58*s,cx-56*s,cy-58*s,cx-66*s,cy-8*s);x.fill();
+  x.strokeStyle='#4a2f1e';x.lineWidth=3*s;[[-1],[1]].forEach(([d])=>{x.beginPath();x.moveTo(cx+d*12*s,cy-18*s);x.lineTo(cx+d*36*s,cy-22*s);x.stroke()});
+  [-23,23].forEach(dx=>{x.fillStyle='#fff';x.beginPath();x.ellipse(cx+dx*s,cy,11*s,Math.max(0.6,6*s*eye),0,0,7);x.fill();
+    if(eye>0.3){x.fillStyle='#2b1a10';x.beginPath();x.arc(cx+dx*s,cy,4.5*s*eye,0,7);x.fill()}});
+  x.strokeStyle='#a0705a';x.lineWidth=2.5*s;x.beginPath();x.moveTo(cx,cy+6*s);x.lineTo(cx-6*s,cy+30*s);x.lineTo(cx+4*s,cy+32*s);x.stroke();
+  x.strokeStyle='#8a4b3b';x.lineWidth=3*s;x.beginPath();x.moveTo(cx-17*s,cy+48*s);x.quadraticCurveTo(cx,cy+57*s,cx+17*s,cy+48*s);x.stroke();
+}
+function landmarks(cx,cy,s){const P=[];
+  for(let i=0;i<17;i++){const a=0.1*Math.PI+i/16*0.8*Math.PI;P.push([cx+Math.cos(a)*60*s,cy+Math.sin(a)*80*s+4*s])}
+  for(let i=0;i<5;i++){P.push([cx-38*s+i*6.5*s,cy-20*s-Math.sin(i/4*Math.PI)*4*s]);P.push([cx+12*s+i*6.5*s,cy-20*s-Math.sin(i/4*Math.PI)*4*s])}
+  for(let i=0;i<4;i++)P.push([cx,cy+4*s+i*7*s]);for(let i=0;i<5;i++)P.push([cx-10*s+i*5*s,cy+32*s]);
+  for(let i=0;i<6;i++){const a=i/6*Math.PI*2;P.push([cx-23*s+Math.cos(a)*11*s,cy+Math.sin(a)*5*s]);P.push([cx+23*s+Math.cos(a)*11*s,cy+Math.sin(a)*5*s])}
+  for(let i=0;i<12;i++){const a=i/12*Math.PI*2;P.push([cx+Math.cos(a)*18*s,cy+50*s+Math.sin(a)*6*s])}
+  return P}
+function drawCam(t,v){
+  const c=document.getElementById('cam');if(c.width!==1120){c.width=1120;c.height=740}
+  const x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);const W=560,H=370;
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#3b4658');g.addColorStop(1,'#1c2330');x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.strokeStyle='#52607a';x.lineWidth=2;x.beginPath();x.moveTo(0,300);x.lineTo(150,230);x.lineTo(410,230);x.lineTo(W,300);x.moveTo(150,230);x.lineTo(150,40);x.moveTo(410,230);x.lineTo(410,40);x.stroke();
+  x.fillStyle='#2a3344';x.fillRect(200,60,160,170);x.fillStyle='#fde68a22';x.beginPath();x.arc(280,30,90,0,Math.PI);x.fill();
+  const k=Math.min(1,t/1.0),s=0.55+0.45*(1-(1-k)*(1-k)),cx=280,cy=170+(1-k)*20;
+  // моргание
+  let eye=1;if(v.live&&D.blink>0){const b=t-D.blink;if(b<0.25)eye=Math.abs(1-b/0.125)}
+  if(v.photo){
+    x.fillStyle='#3f4654';x.beginPath();x.ellipse(cx,cy+190,160,90,0,Math.PI,0);x.fill();
+    x.save();x.translate(cx,cy+6);x.rotate(-0.05);
+    x.fillStyle='#d9a77f';x.beginPath();x.ellipse(40*s,150*s,40*s,26*s,0,0,7);x.fill();
+    x.fillStyle='#0d0f13';x.beginPath();x.roundRect?x.roundRect(-92*s,-140*s,184*s,290*s,18*s):x.rect(-92*s,-140*s,184*s,290*s);x.fill();
+    x.fillStyle='#cfd8e3';x.fillRect(-82*s,-124*s,164*s,262*s);
+    x.save();x.beginPath();x.rect(-82*s,-124*s,164*s,262*s);x.clip();drawFace(x,0,0,s*0.85,v,1);x.restore();
+    const gl=x.createLinearGradient(-82*s,-124*s,82*s,138*s);gl.addColorStop(0,'#ffffff33');gl.addColorStop(.4,'#ffffff00');x.fillStyle=gl;x.fillRect(-82*s,-124*s,164*s,262*s);
+    x.restore();
+  } else drawFace(x,cx,cy,s,v,eye);
+  const col=D.res==='ok'?'#34d399':D.res==='deny'?'#f87171':D.res==='spoof'?'#fbbf24':'#38bdf8';
+  const fs=v.photo?0.85*s:s;
+  if(t>=TL[1]){const bw=150*fs,bh=190*fs,bx=cx-bw/2,by=cy-bh/2-8*fs,L=24;
+    x.strokeStyle=col;x.lineWidth=3;x.beginPath();
+    [[bx,by,1,1],[bx+bw,by,-1,1],[bx,by+bh,1,-1],[bx+bw,by+bh,-1,-1]].forEach(([px,py,dx,dy])=>{x.moveTo(px+dx*L,py);x.lineTo(px,py);x.lineTo(px,py+dy*L)});x.stroke();
+    if(!D.res){const sy=by+((t*140)%bh);x.fillStyle=col+'aa';x.fillRect(bx,sy,bw,2)}
+    x.fillStyle=col;x.font='bold 12px sans-serif';x.fillText(D.res==='ok'?v.name+' · '+v.dist.toFixed(2):D.res==='deny'?'unknown · '+v.dist.toFixed(2):D.res==='spoof'?'SPOOF · no blink':'face 0.98',bx,by-6);
+  }
+  if(t>=TL[2]){const P=landmarks(cx,cy-(v.photo?6:0),fs);const n=Math.min(P.length,Math.floor((t-TL[2])*120));x.fillStyle=col;for(let i=0;i<n;i++){x.beginPath();x.arc(P[i][0],P[i][1],1.8,0,7);x.fill()}}
+  if(t>=TL[3]){const n=Math.min(128,Math.floor((t-TL[3])*200));x.fillStyle='#0008';x.fillRect(10,H-34,W-20,26);
+    for(let i=0;i<n;i++){const hh=3+Math.abs(Math.sin(i*1.7+v.dist*30))*16;x.fillStyle=i%2?'#a78bfa':'#38bdf8';x.fillRect(16+i*4.2,H-21-hh/2,3,hh)}}
+  if(D.res){x.fillStyle=col+'dd';x.fillRect(0,44,W,38);x.fillStyle='#04111f';x.font='800 18px sans-serif';x.textAlign='center';
+    x.fillText(D.res==='ok'?'ДОСТУП РАЗРЕШЁН — '+v.name.toUpperCase():D.res==='deny'?'ДОСТУП ЗАПРЕЩЁН — НЕТ В БАЗЕ':'ОБМАН: ФОТО ВМЕСТО ЛИЦА',W/2,69);x.textAlign='left'}
+}
+tgMsg('ok','👋 Бот подключён<br>замок lab502 онлайн');
+
+go(Math.max(0,(parseInt(location.hash.slice(1))||1)-1));
+</script>
+</body>
+</html>
